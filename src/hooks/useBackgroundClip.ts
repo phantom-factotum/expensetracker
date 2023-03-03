@@ -1,4 +1,4 @@
-import { Skia, SkRect, useValue } from "@shopify/react-native-skia";
+import { Skia, useValue } from "@shopify/react-native-skia";
 import { useEffect, useState } from "react";
 import { LayoutRectangle } from "react-native";
 import { Coordinate, PositionPoint } from "../../types";
@@ -19,8 +19,6 @@ export default function useBackgroundClip(
   layout: LayoutRectangle
 ) {
   const [points, setPoints] = useState<Dot[]>([]);
-  const [midPoints, setMidPoints] = useState<Dot[]>([]);
-  const [deltas, setDeltas] = useState<Coordinate>([0, 0]);
   const path = useValue(Skia.Path.Make());
   const { width, height } = layout;
 
@@ -29,6 +27,7 @@ export default function useBackgroundClip(
       return;
     }
     path.current = Skia.Path.Make();
+    path.current.moveTo(0, 0);
     const startPoint: Coordinate = [
       clipConfig.startPointRatio[0] * width,
       clipConfig.startPointRatio[1] * height,
@@ -40,103 +39,54 @@ export default function useBackgroundClip(
     const deltaX = endPoint[0] - startPoint[0];
     const deltaY = endPoint[1] - startPoint[1];
 
-    const newPoints: Coordinate[] = [];
-    const middlePoints: Dot[] = [];
+    // waveSlope will be tied to start and end points
+    const waveSlope = (deltaY / deltaX) * 0.95;
+    let points: Coordinate[] = [];
+    // match wave frequency to segments
+    const freq = Math.PI * 2;
+    const reflect = 1;
+    // sinwave amplification
+    const amp = (width * 0.15 * reflect) / waveSlope;
+    let sinPoints: Coordinate[] = [];
+    const xIncrements = deltaX / clipConfig.segments;
     for (let i = 0; i < clipConfig.segments; i++) {
-      const x = startPoint[0] + (deltaX * i) / (clipConfig.segments - 1);
-      let y = startPoint[1] + (deltaY * i) / (clipConfig.segments - 1);
-      const point1: Coordinate = [x, y];
-      const lastIndex = i - 1;
-      if (lastIndex >= 0) {
-        const [lastX, lastY] = newPoints[i - 1];
-        const yOffset =
-          (deltaY / clipConfig.segments) * (lastIndex % 2 == 0 ? -1 : 1) * 0;
-        const midX = (lastX + x) / 2;
-        let midY = (lastY + y) / 2 + yOffset;
-        const midPoint: Coordinate = [midX, midY];
-        newPoints.push(midPoint);
-        middlePoints.push({
-          cx: midX,
-          cy: midY,
-          color: "orange",
-        });
-      }
-      newPoints.push(point1);
+      // make xValue take on a  x coordinate  between startPoint and endPoint
+      const x = i * xIncrements + startPoint[0];
+      const baseWave = amp * Math.sin(freq * x) + startPoint[1];
+      const slopeTransform = waveSlope * x;
+      const y = baseWave + slopeTransform;
+      // if (x < startPoint[0] && y < startPoint[1]) continue;
+      // if (x > endPoint[0]) break;
+      sinPoints.push([x, y]);
     }
-
-    const dots = newPoints.map(([cx, cy]) => ({
-      cx,
-      cy,
-      color: "purple",
-    }));
-
-    const { min, max } = dots.reduce(
-      (prev, curr) => {
-        if (curr.cy < prev.min.cy) {
-          prev.min = curr;
-        }
-        if (curr.cy > prev.max.cy) {
-          prev.max = curr;
-        }
-        return prev;
-      },
-      { min: dots[0] || { cx: 0, cy: 0 }, max: dots[0] || { cx: 0, cy: 0 } }
+    // reverse list since we have move acrossed the screen clockwise
+    sinPoints = sinPoints.reverse();
+    // start at top left corner
+    points.push([0, 0]);
+    // move to top right corner
+    points.push([width, 0]);
+    // move down with x on the edge to startY position
+    points.push([width, startPoint[1]]);
+    // move, while on edge, from startY to first sinPoint
+    points.push([width, sinPoints[0][1]]);
+    // add sinPoints
+    points = points.concat(sinPoints);
+    // if last sinPoint x position isnt zero then draw a line to 0
+    // from last sinPoint y
+    const lastPoint = sinPoints[sinPoints.length - 1];
+    if (lastPoint[0] != 0) {
+      points.push([0, lastPoint[1]]);
+      points.push([0, 0]);
+    }
+    // add points to path
+    points.forEach((point) => path.current.lineTo(point[0], point[1]));
+    setPoints(
+      points.map((pt) => ({
+        cx: pt[0],
+        cy: pt[1],
+        color: "green",
+      }))
     );
-    path.current.moveTo(0, 0);
-    path.current.lineTo(width, 0);
-    path.current.lineTo(width, min.cy);
-    // path.current.lineTo(0, min.cy);
-    // path.current.lineTo(0, startPoint[1]);
-    setMidPoints(middlePoints);
-    setPoints(dots);
-    setDeltas([deltaX, deltaY]);
-    // middlePoints = middlePoints.reverse;
-    dots.reverse().forEach((point, i) => {
-      const { cx, cy } = point;
-      const point2 = dots[i - 1] || {
-        cx: cx + deltaX,
-        cy: cy + deltaY,
-      };
-
-      const rect: SkRect = {
-        x: point2.cx || cx,
-        y: point2.cy || cy,
-        width: deltaX,
-        height: deltaY,
-      };
-      path.current.arcToOval(
-        rect,
-        i == 0 ? -90 : 180,
-        i == 0 ? 90 : -90,
-        false
-      );
-      // const [controlPt1, controlPt2] = generateControlPoints(
-      //   point,
-      //   deltaX,
-      //   deltaY,
-      //   clipConfig.segments
-      // );
-      // path.current.cubicTo(...controlPt1, ...controlPt2, cx, cy);
-      // if (middlePoints[i]) {
-      //   const { cx: midX, cy: midY } = middlePoints[i];
-      //   const [midCtrlPt1, midCtrlPt2] = generateControlPoints(
-      //     middlePoints[i],
-      //     deltaX,
-      //     deltaY,
-      //     clipConfig.segments
-      //   );
-      //   path.current.cubicTo(midX, midY, ...midCtrlPt2, ...midCtrlPt1);
-      //   // path.current.lineTo(midX, midY);
-      // }
-    });
-    const { x, y } = path.current.getLastPt();
-    if (startPoint[0] > 0) {
-      path.current.lineTo(0, y);
-      path.current.lineTo(0, 0);
-    }
-    //  else{
-    //   path.current.lineTo()
-    //  }
   }, [
     layout,
     clipConfig.segments,
@@ -147,28 +97,5 @@ export default function useBackgroundClip(
   return {
     path: path.current,
     points,
-    middlePoints: midPoints,
-    deltas,
   };
 }
-
-const generateControlPoints = (
-  point: Dot,
-  deltaX: number,
-  deltaY: number,
-  segments: number,
-  distBetweenPoints?: number
-): [Coordinate, Coordinate] => {
-  if (!distBetweenPoints) distBetweenPoints = 2;
-  const slope = 3.5;
-  const point1: Coordinate = [
-    (point.cx - distBetweenPoints) * slope,
-    (point.cy - distBetweenPoints) * slope,
-  ];
-  const point2: Coordinate = [
-    (point.cx + distBetweenPoints) * -(1 / slope),
-    (point.cy + distBetweenPoints) * -(1 / slope),
-  ];
-
-  return [point1, point2];
-};
