@@ -1,11 +1,26 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { useState } from "react";
+import { StyleSheet, View } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import ContextContainer from "./src/context";
+import Screens from "./src/navigation";
+import Loading from "./src/navigation/screens/Loading";
 
-export default function App() {
+type Props = {};
+
+export default function App(props: Props) {
+  const [isLoaded, setIsLoaded] = useState(true);
+
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
+    <View style={{ flex: 1 }}>
+      {isLoaded ? (
+        <SafeAreaProvider>
+          <ContextContainer style={styles.container}>
+            <Screens style={styles.container} />
+          </ContextContainer>
+        </SafeAreaProvider>
+      ) : (
+        <Loading onComplete={() => setIsLoaded(true)} />
+      )}
     </View>
   );
 }
@@ -13,8 +28,5 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
