@@ -13,7 +13,7 @@ export type Dot = {
   cy: number;
   color: string;
 };
-
+const useWaveSlope = true;
 export default function useBackgroundClip(
   clipConfig: ClipConfig,
   layout: LayoutRectangle
@@ -36,25 +36,27 @@ export default function useBackgroundClip(
       clipConfig.endPointRatio[0] * width,
       clipConfig.endPointRatio[1] * height,
     ];
-    const deltaX = endPoint[0] - startPoint[0];
-    const deltaY = endPoint[1] - startPoint[1];
-
+    const deltaX = Math.abs(endPoint[0] - startPoint[0]);
+    const deltaY = Math.abs(endPoint[1] - startPoint[1]);
+    const deltaSlope = deltaY / deltaX;
+    const deviceSlope = height / width;
+    const slope = deltaSlope;
     // waveSlope will be tied to start and end points
-    const waveSlope = (deltaY / deltaX) * 0.95;
+    const waveSlope = useWaveSlope ? slope : 2;
     let points: Coordinate[] = [];
     // match wave frequency to segments
-    const freq = Math.PI * 2;
+    const freq = Math.PI * 2; //* clipConfig.segments;
     const reflect = 1;
     // sinwave amplification
-    const amp = (width * 0.15 * reflect) / waveSlope;
+    const amp = height * 0.05 * reflect;
     let sinPoints: Coordinate[] = [];
-    const xIncrements = deltaX / clipConfig.segments;
+    const xIncrements = deltaX / clipConfig.segments; //ß clipConfig.segments;
     for (let i = 0; i < clipConfig.segments; i++) {
       // make xValue take on a  x coordinate  between startPoint and endPoint
-      const x = i * xIncrements + startPoint[0];
-      const baseWave = amp * Math.sin(freq * x) + startPoint[1];
+      const x = i * xIncrements;
       const slopeTransform = waveSlope * x;
-      const y = baseWave + slopeTransform;
+      const baseWave = amp * Math.sin(x + freq);
+      const y = baseWave + slopeTransform + startPoint[1];
       // if (x < startPoint[0] && y < startPoint[1]) continue;
       // if (x > endPoint[0]) break;
       sinPoints.push([x, y]);

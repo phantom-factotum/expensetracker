@@ -9,13 +9,13 @@ export default function Login({}: Props) {
     <Background
       style={styles.container}
       contentContainerStyle={styles.contentContainerStyle}
-      startPointRatio={[0.1, 0.25]}
+      startPointRatio={[0, 0.48]}
       endPointRatio={[1, 1]}
       // invertClip
-      showSegmentPoints
+      // showSegmentPoints
       source={require("../../../assets/abstract.jpg")}
       isSVG={false}
-      segments={50}
+      segments={2 ** 6}
     >
       <Text>Login Screen</Text>
       <Button
